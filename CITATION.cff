@@ -1,0 +1,33 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: >-
+  Economic Model Predictive Control with Rule Based Control
+  Integration to Greenhouse Climate Control on a Lettuce
+  Model
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Ioannis
+    family-names: Panagopoulos
+    email: i.panagopoulos@tudelft.nl
+    affiliation: Delft University of Technology
+  - given-names: Koty
+    family-names: McAllister
+    email: r.d.mcallister@tudelft.nl
+    affiliation: Delft University of Technology
+  - given-names: Tamas
+    family-names: Keviczky
+    email: t.keviczky@tudelft.nl
+    affiliation: Delft university of Technology
+  - given-names: Simon
+    name-particle: van
+    family-names: Mourik
+    email: simon.vanmourik@wur.nl
+    affiliation: Wageningen University and Research
+repository-code: >-
+  https://github.com/ipanagopoulos/Cascaded-EMPC-RBC-Lettuce-GH
+license: MIT
