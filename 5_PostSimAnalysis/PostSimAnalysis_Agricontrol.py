@@ -262,7 +262,7 @@ ax.set_xlabel('Time [Days]', fontsize = 14.0)
 ax = axes[2, 2]
 ax.plot(x, y_val[2,0:Nsim], color='darkorange', linewidth=2)#, label='EMPC') 
 ax.plot(x, y_cl[2,0:Nsim], color='darkviolet', linewidth=2, linestyle='-', dashes=[4, 1])#, label='EMPC-RBC')  
-ax.plot(x, x_sp_cl[1,0:Nsim], color='blue',  linewidth=1.5, linestyle='-', dashes=[5, 0], label='$s_{\mathrm{vent}}$')
+ax.plot(x, x_sp_cl[1,0:Nsim], color='darkcyan',  linewidth=1.5, linestyle='-', dashes=[5, 0], label='$s_{\mathrm{vent}}$')
 ax.plot(x, x_sp_cl[2,0:Nsim], color='red',  linewidth=1.5, linestyle='-', dashes=[5, 0], label='$s_{\mathrm{heat}}$')
 ax.set_title('Air temperature', fontsize = 16.0)  # Title for each subplot
 ax.set_ylabel('$y_{\mathrm{T}} \ \ [^o\mathrm{C}]$', fontsize = 14.0)  # Display ylabel
@@ -287,7 +287,7 @@ plt.tight_layout()
 
 if storage:
     # Save the figure with the unique identifier in the filename
-    filename = f'../5_PostSimAnalysis/ENMPC-RBC-nominal/Simulation_Results.png'
+    filename = f'../5_PostSimAnalysis/ENMPC_vs_ENMPC-RBC_Comparison/Simulation_Results.png'
     plt.savefig(filename, dpi=300)  # Save as a PNG with high resolution
 
 # Show the plot

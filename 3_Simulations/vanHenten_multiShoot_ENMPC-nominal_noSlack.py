@@ -3,177 +3,44 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
 import time
+
+import sys
+import os
+
+# Add the parent directory of ../2_Models to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../2_Models')))
+from RK4_integration import RK4
+from collocation import collocation
+from lettuce_model import vanHenten_LettuceModel
+
 # Decide if you want to store the results
 storage = False
 unique_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-#%%%%%%%%%%%%%%% CLIMATE-CROP MODEL %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-p1 = 0.544; p2 = 2.65e-07; p3 = 53; p4 = 3.55e-09;
-p5 = 5.11e-06; p6 = 0.00023; p7 = 0.000629;
-p8 = 5.2e-05; p9 = 4.1; p10 = 4.87e-07;
-p11 = 7.5e-06; p12 = 8.31; p13 = 273.15;
-p14 = 101325; p15 = 0.044; p16 = 30000;
-p17 = 1290; p18 = 6.1; p19 = 0.2; p20 = 4.1;
-p21 = 0.0036; p22 = 9348; p23 = 8314;
-p24 = 273.15; p25 = 17.4; p26 = 239;
-p27 = 17.269; p28 = 238.3;
-
-w1 = 0; w2 = 0; w3 = 0; w4 = 0; # No disturbances
-
+#%%%%%%%%%%%%%%% Climate-crop model %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Dimensions
 nx = 4
 nu = 3
 nd = 4
 ny = 4
 
-# Declare variables
+# # Declare variables
 x  = ca.SX.sym('x', nx)  # state
 u  = ca.SX.sym('u', nu)  # control
 d  = ca.SX.sym('d', nd)  # exogenous inputs
 y  = ca.SX.sym('y', ny)  # outputs
 
-y[0] = 10**(3)*x[0];                                                                 # Weight in g m^{-2}
-y[1] = p12*(x[2]+p13)/(p14*p15)*x[1]*10**(3);                                 # Indoor CO2 in ppm 10^{3}
-y[2] = x[2];                                                                       # Air Temp in  ^oC
-y[3] = p12*(x[2] + p13)/(11*ca.exp(p27*x[2]/(x[2]+p28)))*x[3]*10**(2);             # RH C_{H2O} in %
-
-phi       = p4*d[0] + (-p5*x[2]**2 + p6*x[2] - p7)*(x[1] - p8);
-PhiPhot_c = (1-ca.exp(-p3*x[0]))*(p4*d[0]*(-p5*x[2]**2 + p6*x[2] - p7)*(x[1]-p8))/phi;         # gross canopy phootsynthesis rate
-PhiVent_c = (u[1]*10**(-3) + p11)*(x[1]-d[1]);                                           # mass exhcnage of CO2 thorought the vents
-PhiVent_h = (u[1]*10**(-3) + p11)*(x[3] - d[3]);                                         # canopy transpiration
-PhiTransp_h = p21*(1 - ca.exp(-p3*x[0]))*(p22/(p23*(x[2]+p24))*ca.exp(p25*x[2]/(x[2]+p26))-x[3]); # mass exchange of H2) through the vents
-
-dx1dt = (p1*PhiPhot_c - p2*x[0]*2**(x[2]/10 - 5/2))*(1+w1);
-dx2dt = 1/p9*(-PhiPhot_c + p10*x[0]*2**(x[2]/10 - 5/2) + u[0]*10**(-6) - PhiVent_c)*(1+w2);
-dx3dt = 1/p16*(u[2] - (p17*u[1]*10**(-3) + p18)*(x[2] - d[2]) + p19*d[0])*(1+w3);
-dx4dt = 1/p20*(PhiTransp_h - PhiVent_h)*(1+w4);
-
-ode = ca.vertcat(dx1dt, dx2dt, dx3dt, dx4dt)
-
-dae = {'x':x, 'p':ca.vertcat(u,d), 'ode':ode}
-
-# Continuous time climate-crop dynamics
-f = ca.Function('f', [x, u, d], [ode])
-
-h_meas = ca.Function('h_meas', [x], [y])
-
-
-
-#%%%%%%%%%%%%%%%% COLLOCATION %%%%%%%%%%%%%%%%%%%%%%%%%%%
+f, h_meas = vanHenten_LettuceModel()
+#%%%%%%%%%%%%%%%% Integration %%%%%%%%%%%%%%%%%%%%%%%%%%%
 h = 300*3
 integration_method = "RK4"
 
 if integration_method == "collocation":
-    # Number of finite elements
-    n = 1
-
-    # Degree of interpolating polynomial
-    d = 2
-
-    # Get collocation points
-    tau_root = np.append(0, ca.collocation_points(d, 'legendre'))
-
-    # Coefficients of the collocation equation
-    C = np.zeros((d+1,d+1))
-
-    # Coefficients of the continuity equation
-    D = np.zeros(d+1)
-
-    # Coefficients of the quadrature function
-    B = np.zeros(d+1) 
-
-    # Construct polynomial basis
-    for j in range(d+1):
-        # Construct Lagrange polynomials to get the polynomial basis at the collocation point
-        p = np.poly1d([1])
-        for r in range(d+1):
-            if r != j:
-                p *= np.poly1d([1, -tau_root[r]]) / (tau_root[j]-tau_root[r])
-
-        # Evaluate the polynomial at the final time to get the coefficients of the continuity equation
-        D[j] = p(1.0)
-
-        # Evaluate the time derivative of the polynomial at all collocation points to get the coefficients of the continuity equation
-        pder = np.polyder(p)
-        for r in range(d+1):
-            C[j,r] = pder(tau_root[r])
-
-        # Evaluate the integral of the polynomial to get the coefficients of the quadrature function
-        pint = np.polyint(p)
-        B[j] = pint(1.0)
-        
-    # Total number of variables for one finite element
-    X0 =ca.MX.sym('X0',nx)
-    U  = ca.MX.sym('U',nu)
-    W  = ca.MX.sym('W', nd)
-    V = ca.MX.sym('V',d*nx)
-
-    # Get the state at each collocation point
-    X = [X0] + ca.vertsplit(V,[r*nx for r in range(d+1)])
-
-    # Get the collocation equations (that define V)
-    V_eq = []
-    for j in range(1,d+1):
-      # Expression for the state derivative at the collocation point
-      xp_j = 0
-      for r in range (d+1):
-        xp_j += C[r,j]*X[r]
-
-      # Append collocation equations
-      f_j = f(X[j],U,W)
-      V_eq.append(h*f_j - xp_j)
-
-    # Concatenate constraints
-    V_eq = ca.vertcat(*V_eq)
-
-    # Root-finding function, implicitly defines V as a function of X0 and P
-    vfcn = ca.Function('vfcn', [V, X0, U, W], [V_eq])
-
-    # Convert to SX to decrease overhead
-    vfcn_sx = vfcn#.expand()
-
-    # Create a implicit function instance to solve the system of equations
-    ifcn = ca.rootfinder('ifcn', 'newton', vfcn_sx)
-    V = ifcn(ca.MX(),X0,U,W)
-    X = [X0 if r==0 else V[(r-1)*nx:r*nx] for r in range(d+1)]
-
-    # Get an expression for the state at the end of the finite element
-    XF = 0
-    for r in range(d+1):
-      XF += D[r]*X[r]
-
-    # Get the discrete time dynamics
-    # F = ca.Function('F', [X0,U,W],[XF])
-    F = ca.Function('F', [X0, U, W], [XF],['x0','u', 'd'],['xf'])
-
-    # # Do this iteratively for all finite elements
-    # X = X0
-    # for i in range(n):
-    #   X = F(X,U,W)
-
+    F = collocation(h, nx, nu, nd, f)
     
-    # # Fixed-step integrator
-    # irk_integrator = ca.Function('irk_integrator', {'x0':X0, 'p':ca.vertcat(U, W), 'xf':X}, 
-    #                           ca.integrator_in(), ca.integrator_out())
-
-
-    # # Create a convensional integrator for reference
-    # ref_integrator = ca.integrator('ref_integrator', 'cvodes', dae, 0, h)
 elif integration_method == "RK4":
-    n_rk4 = 1
-    delta_rk4 = h / n_rk4
-    x_rk4 = x
-    for i in range(n_rk4):
-        k_1 = f(x, u, d)
-        k_2 = f(x + 0.5 * delta_rk4 * k_1, u, d)
-        k_3 = f(x + 0.5 * delta_rk4 * k_2, u, d)
-        k_4 = f(x + delta_rk4 * k_3, u, d)
-        x_rk4 = x_rk4 + (1 / 6) * (k_1 + 2 * k_2 + 2 * k_3 + k_4) * delta_rk4
-    # Get the discrete time dynamics
-    F = ca.Function('F', [x,u,d],[x_rk4],['x0','u', 'd'],['xf'])
+    F = RK4(h, x, u, d, f)
         
-
-
 
 # Load Initial Conditions and Reference Values
 x0_val_irk  = np.array([0.0035, 0.001, 15, 0.008])
@@ -183,8 +50,7 @@ d_val = np.loadtxt('../1_InputData/vanHentenENMPCweather.csv',delimiter=',',skip
 x_val = np.loadtxt('../1_InputData/vanHentenENMPCstates.csv',delimiter=',',skiprows=0)
 y_val = np.loadtxt('../1_InputData/vanHentenENMPCoutputs.csv',delimiter=',',skiprows=0)
 
-#%%%%%%%%%%%%%%%%%%% MPC %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-###############################################################################
+#%%%%%%%%%%%%%%%%%%% EMPC loop %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 Delta = h
 N = 4*6                      # Prediction horizon = 6 hours for h = 15 min
